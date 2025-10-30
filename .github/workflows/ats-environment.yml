@@ -3,7 +3,7 @@ name: ATS Environment Setup
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # manual trigger
+  workflow_dispatch:
 
 jobs:
   setup-environment:
@@ -22,7 +22,7 @@ jobs:
           echo "$PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} <<EOF
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} 'bash -s' <<'EOF'
             set -e
             echo "🚀 Setting up ATS environment on EC2..."
 
@@ -57,7 +57,7 @@ jobs:
             sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ak_db TO ak_user;"
 
             # Configure Nginx dynamically
-            sudo tee /etc/nginx/sites-available/ats.conf > /dev/null <<NGINX
+            sudo bash -c "cat > /etc/nginx/sites-available/ats.conf" <<'NGINX'
             server {
                 listen 80;
                 server_name ${HOST};
@@ -66,17 +66,17 @@ jobs:
                 index index.html;
 
                 location / {
-                  try_files \$uri \$uri/ /index.html;
+                    try_files \$uri \$uri/ /index.html;
                 }
 
                 location /backend/ {
-                  rewrite ^/backend/?(.*)\$ /\$1 break;
-                  proxy_pass http://127.0.0.1:8000/;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade \$http_upgrade;
-                  proxy_set_header Connection 'upgrade';
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
+                    rewrite ^/backend/?(.*)\$ /\$1 break;
+                    proxy_pass http://127.0.0.1:8000/;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
                 }
             }
             NGINX
