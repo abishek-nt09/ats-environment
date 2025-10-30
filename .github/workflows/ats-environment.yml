@@ -22,7 +22,7 @@ jobs:
           echo "$PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} <<EOF
             set -e
             echo "🚀 Setting up ATS environment on EC2..."
 
@@ -30,7 +30,7 @@ jobs:
             sudo apt update -y
             sudo apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib nginx nodejs npm git curl
 
-            # Enable and start PostgreSQL
+            # Enable PostgreSQL
             sudo systemctl enable postgresql
             sudo systemctl start postgresql
 
@@ -38,7 +38,7 @@ jobs:
             sudo mkdir -p /var/www/ats /var/www/ats-backups
             sudo chown -R ubuntu:www-data /var/www/ats /var/www/ats-backups
 
-            # Configure PostgreSQL user and database safely
+            # Configure PostgreSQL user, database, and permissions
             if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='ak_user';" | grep -q 1; then
               sudo -u postgres psql -c "CREATE USER ak_user WITH PASSWORD 'navat';"
               echo "✅ PostgreSQL user 'ak_user' created."
@@ -53,8 +53,11 @@ jobs:
               echo "ℹ️ Database 'ak_db' already exists."
             fi
 
-            # Configure Nginx
-            sudo tee /etc/nginx/sites-available/ats.conf > /dev/null << NGINX
+            # Grant privileges
+            sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ak_db TO ak_user;"
+
+            # Configure Nginx dynamically
+            sudo tee /etc/nginx/sites-available/ats.conf > /dev/null <<NGINX
             server {
                 listen 80;
                 server_name ${HOST};
@@ -63,17 +66,17 @@ jobs:
                 index index.html;
 
                 location / {
-                    try_files \$uri \$uri/ /index.html;
+                  try_files \$uri \$uri/ /index.html;
                 }
 
                 location /backend/ {
-                    rewrite ^/backend/?(.*)$ /$1 break;
-                    proxy_pass http://127.0.0.1:8000/;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade \$http_upgrade;
-                    proxy_set_header Connection 'upgrade';
-                    proxy_set_header Host \$host;
-                    proxy_set_header X-Real-IP \$remote_addr;
+                  rewrite ^/backend/?(.*)\$ /\$1 break;
+                  proxy_pass http://127.0.0.1:8000/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
                 }
             }
             NGINX
