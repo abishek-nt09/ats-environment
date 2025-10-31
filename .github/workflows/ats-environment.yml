@@ -1,7 +1,9 @@
 name: ATS Environment Setup
 
 on:
-  workflow_dispatch:  # manual trigger
+  push: 
+  branches: [ "main" ]
+  workflow_dispatch: # manual trigger
 
 jobs:
   setup-environment:
