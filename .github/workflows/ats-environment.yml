@@ -23,7 +23,8 @@ jobs:
           chmod 600 private_key.pem
 
           echo "📤 Uploading environment setup script..."
-          scp -o StrictHostKeyChecking=no -i private_key.pem setup_environment.sh ${USER}@${HOST}:/home/${USER}/setup_environment.sh
+          scp -o StrictHostKeyChecking=no -i private_key.pem scripts/setup_environment.sh ${USER}@${HOST}:/home/${USER}/setup_environment.sh
 
           echo "🚀 Running setup script on EC2..."
           ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} "bash /home/${USER}/setup_environment.sh"
+
