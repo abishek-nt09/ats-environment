@@ -71,7 +71,8 @@ jobs:
             }
             NGINX
 
-            sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
+           
+          EOF
+           sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
             sudo nginx -t
             echo "✅ Nginx configuration completed (not started yet)."
-          EOF
