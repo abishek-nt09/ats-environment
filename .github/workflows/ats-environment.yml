@@ -1,7 +1,9 @@
 name: ATS Environment Setup
 
 on:
-  workflow_dispatch:  # Run manually from GitHub Actions tab
+  push:
+    branches: [main]
+  workflow_dispatch:  
 
 jobs:
   setup:
