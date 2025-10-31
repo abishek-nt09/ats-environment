@@ -1,91 +1,76 @@
 name: ATS Environment Setup
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:  # Run manually from GitHub Actions tab
 
 jobs:
-  setup-environment:
+  setup:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Connect and setup EC2 environment
-        env:
-          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
-        run: |
-          set -euo pipefail
-          echo "$PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} 'bash -s' <<'EOF'
+      - name: Connect to EC2 and setup full environment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
             set -e
-            echo "🚀 Setting up ATS environment on EC2 (${HOST})..."
+            echo "=== 🚀 Updating and installing dependencies ==="
+            sudo apt update -y && sudo apt upgrade -y
+            sudo apt install -y git nginx python3-venv python3-pip postgresql postgresql-contrib nodejs npm
 
-            # Update and install dependencies
-            sudo apt update -y
-            sudo apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib nginx nodejs npm git curl
+            echo "=== 🗂️ Creating required directories ==="
+            sudo mkdir -p /var/www/ats/{backend,frontend}
+            sudo mkdir -p /var/www/ats-backups/backend
+            sudo chown -R ubuntu:www-data /var/www/ats /var/www/ats-backups
+            sudo chmod -R 775 /var/www/ats /var/www/ats-backups
 
-            # Enable and start PostgreSQL
-            sudo systemctl enable postgresql
-            sudo systemctl start postgresql
+            echo "=== 🧩 Setting up PostgreSQL ==="
+            sudo -u postgres psql <<'EOF'
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ak_db') THEN
+                    CREATE DATABASE ak_db;
+                END IF;
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ak_user') THEN
+                    CREATE USER ak_user WITH PASSWORD 'navat';
+                END IF;
+                GRANT ALL PRIVILEGES ON DATABASE ak_db TO ak_user;
+            END
+            $$;
+            EOF
 
-            # Create project directories
-            sudo mkdir -p /var/www/ats /var/www/ats-backups
-            sudo chown -R ${USER}:www-data /var/www/ats /var/www/ats-backups
+            echo "=== ⚙️ Configuring Nginx ==="
+            sudo bash -c 'cat > /etc/nginx/sites-available/ats.conf << "EOL"
+            server {
+                listen 80;
+                server_name _;
 
-            # Configure PostgreSQL user, database, and permissions
-            if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='ak_user';" | grep -q 1; then
-              sudo -u postgres psql -c "CREATE USER ak_user WITH PASSWORD 'navat';"
-              echo "✅ PostgreSQL user 'ak_user' created."
-            else
-              echo "ℹ️ PostgreSQL user 'ak_user' already exists."
-            fi
+                # FRONTEND (React/Vite)
+                root /var/www/ats/frontend/dist;
+                index index.html;
 
-            if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='ak_db';" | grep -q 1; then
-              sudo -u postgres psql -c "CREATE DATABASE ak_db OWNER ak_user;"
-              echo "✅ Database 'ak_db' created."
-            else
-              echo "ℹ️ Database 'ak_db' already exists."
-            fi
+                location / {
+                    try_files $uri /index.html;
+                }
 
-            # Grant privileges
-            sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ak_db TO ak_user;"
+                # BACKEND (FastAPI)
+                location /backend/ {
+                    rewrite ^/backend/?(.*)$ /$1 break;
+                    proxy_pass http://127.0.0.1:8000/;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                }
 
-            # Configure Nginx dynamically (use sudo bash -c 'cat <<NGINX > ...')
-            sudo bash -c 'cat <<'NGINX' > /etc/nginx/sites-available/ats.conf
-              server {
-                  listen 80;
-                  server_name ${HOST};
-              
-                  root /var/www/ats/frontend/dist;
-                  index index.html;
-              
-                  location / {
-                      try_files \$uri \$uri/ /index.html;
-                  }
-              
-                  location /backend/ {
-                      rewrite ^/backend/?(.*)\$ /\$1 break;
-                      proxy_pass http://127.0.0.1:8000/;
-                      proxy_http_version 1.1;
-                      proxy_set_header Upgrade \$http_upgrade;
-                      proxy_set_header Connection "upgrade";
-                      proxy_set_header Host \$host;
-                      proxy_set_header X-Real-IP \$remote_addr;
-                  }
-              }
-              NGINX'
+                client_max_body_size 50M;
+            }
+            EOL'
 
             sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
-            sudo nginx -t
-            echo "✅ Nginx configuration completed (not started yet)."
-          EOF
+            sudo nginx -t && sudo systemctl reload nginx
 
-          # Securely remove private key from runner
-          shred -u private_key.pem || rm -f private_key.pem
+            echo "=== ✅ Infrastructure setup completed successfully ==="
