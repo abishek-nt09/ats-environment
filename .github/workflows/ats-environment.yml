@@ -81,7 +81,7 @@ jobs:
                         proxy_set_header X-Real-IP \$remote_addr;
                     }
                 }
-            'NGINX'
+                'NGINX'
 
             sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
             sudo nginx -t
