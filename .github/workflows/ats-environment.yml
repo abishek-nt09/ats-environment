@@ -70,10 +70,6 @@ jobs:
             }
             '
 
-            
-
-            echo "🧩 Creating dummy healthcheck endpoint..."
-            echo "OK" | sudo tee /var/www/ats/health.html > /dev/null
 
             echo "✅ Environment setup complete (Nginx configured but not started yet)."
           
