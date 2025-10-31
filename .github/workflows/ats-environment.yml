@@ -36,8 +36,12 @@ jobs:
             sudo chown -R ubuntu:www-data /var/www/ats /var/www/ats-backups
 
             echo "🧠 Configuring PostgreSQL..."
-            sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='ak_user'" | grep -q 1 || sudo -u postgres psql -c "CREATE USER ak_user WITH PASSWORD '\''navat'\'';"
-            sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='ak_db'" | grep -q 1 || sudo -u postgres psql -c "CREATE DATABASE ak_db OWNER ak_user;"
+            sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='ak_user';" | grep -q 1 \
+              || (echo "Creating DB user ak_user..." && sudo -u postgres psql -c "CREATE USER ak_user WITH PASSWORD 'navat';") || echo "User already exists, skipping."
+
+            sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='ak_db';" | grep -q 1 \
+              || (echo "Creating DB ak_db..." && sudo -u postgres psql -c "CREATE DATABASE ak_db OWNER ak_user;") || echo "Database already exists, skipping."
+
 
             echo "🧱 Creating Nginx config..."
             NGINX_CONF="/etc/nginx/sites-available/ats.conf"
