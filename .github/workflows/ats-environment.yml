@@ -42,30 +42,30 @@ jobs:
               || (echo 'Creating DB ak_db...' && sudo -u postgres psql -c \"CREATE DATABASE ak_db OWNER ak_user;\") || echo 'Database already exists, skipping.'
 
            echo '🧱 Creating Nginx config...'
-           sudo tee /etc/nginx/sites-available/ats.conf > /dev/null <<'EOF'
-           server {
-               listen 80;
-               server_name ${HOST};
-           
-               root /var/www/ats/frontend/dist;
-               index index.html;
-           
-               location / {
-                   try_files \$uri \$uri/ /index.html;
-               }
-           
-               location /backend/ {
-                   rewrite ^/backend/?(.*)\$ /\$1 break;
-                   proxy_pass http://127.0.0.1:8000/;
-                   proxy_http_version 1.1;
-                   proxy_set_header Upgrade \$http_upgrade;
-                   proxy_set_header Connection 'upgrade';
-                   proxy_set_header Host \$host;
-                   proxy_set_header X-Real-IP \$remote_addr;
-               } 
-           }
-           EOF'
-
-           sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
-           sudo nginx -t
+           sudo tee /etc/nginx/sites-available/ats.conf > /dev/null <<EOF
+          server {
+              listen 80;
+              server_name ${HOST};
+          
+              root /var/www/ats/frontend/dist;
+              index index.html;
+          
+              location / {
+                  try_files \$uri \$uri/ /index.html;
+              }
+          
+              location /backend/ {
+                  rewrite ^/backend/?(.*)\$ /\$1 break;
+                  proxy_pass http://127.0.0.1:8000/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+              }
+          }
+          EOF
+          
+          sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
+          sudo nginx -t
           
