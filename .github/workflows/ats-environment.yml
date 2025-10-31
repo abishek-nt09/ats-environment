@@ -23,7 +23,7 @@ jobs:
           chmod 600 private_key.pem
 
           echo "🚀 Connecting to EC2 and setting up environment..."
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} '
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} 
             set -e
 
             echo "🔹 Updating system packages..."
@@ -95,4 +95,4 @@ jobs:
             sudo systemctl enable fastapi
 
             echo "✅ Environment setup complete (Nginx configured and FastAPI service ready)."
-          '
+          
