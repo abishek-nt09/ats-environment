@@ -49,7 +49,7 @@ jobs:
             sudo tee /etc/nginx/sites-available/ats.conf > /dev/null <<'EOF'
             server {
                 listen 80;
-                server_name ${HOST};
+                server_name _;
             
                 root /var/www/ats/frontend/dist;
                 index index.html;
@@ -70,10 +70,7 @@ jobs:
             }
             '
 
-            echo "🔗 Enabling Nginx config..."
-            sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
-            sudo rm -f /etc/nginx/sites-enabled/default
-            sudo nginx -t
+            
 
             echo "🧩 Creating dummy healthcheck endpoint..."
             echo "OK" | sudo tee /var/www/ats/health.html > /dev/null
