@@ -1,51 +1,66 @@
 name: ATS Environment Setup
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_dispatch:  # manual trigger
 
 jobs:
   setup-environment:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧩 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🔑 Save EC2 private key
+      - name: Connect and setup EC2 environment
         env:
           PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          printf "%s\n" "$PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-
-      - name: 🚀 Connect to EC2 and setup environment
-        env:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
-          echo "🚀 Connecting to EC2 and setting up environment..."
-
-          ssh -o StrictHostKeyChecking=no -i private_key.pem $USER@$HOST <<'EOF'
+          echo "$PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${USER}@${HOST} << 'EOF'
             set -e
+            echo "🚀 Setting up ATS environment on EC2..."
 
-            echo '🧱 Creating Nginx config...'
-            sudo tee /etc/nginx/sites-available/ats.conf > /dev/null <<'NGINX'
+            # Update and install dependencies
+            sudo apt update -y
+            sudo apt install -y python3 python3-venv python3-pip postgresql postgresql-contrib nginx nodejs npm git curl
+
+            # Create project directories
+            sudo mkdir -p /var/www/ats /var/www/ats-backups
+            sudo chown -R ubuntu:www-data /var/www/ats /var/www/ats-backups
+
+            # Configure PostgreSQL
+            sudo -u postgres psql << SQL
+            DO \$\$
+            BEGIN
+              IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = 'ak_user') THEN
+                CREATE USER ak_user WITH PASSWORD 'navat';
+              END IF;
+              IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ak_db') THEN
+                CREATE DATABASE ak_db OWNER ak_user;
+              END IF;
+            END
+            \$\$;
+            SQL
+
+            # Configure Nginx
+            sudo tee /etc/nginx/sites-available/ats.conf > /dev/null << NGINX
             server {
                 listen 80;
                 server_name ${HOST};
-            
+
                 root /var/www/ats/frontend/dist;
                 index index.html;
-            
+
                 location / {
                     try_files \$uri \$uri/ /index.html;
                 }
-            
+
                 location /backend/ {
-                    rewrite ^/backend/?(.*)\$ /\$1 break;
+                    rewrite ^/backend/?(.*)$ /$1 break;
                     proxy_pass http://127.0.0.1:8000/;
                     proxy_http_version 1.1;
                     proxy_set_header Upgrade \$http_upgrade;
@@ -58,11 +73,5 @@ jobs:
 
             sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
             sudo nginx -t
-            sudo systemctl reload nginx
-
-            echo "✅ Nginx configuration applied successfully!"
+            echo "✅ Nginx configuration completed (not started yet)."
           EOF
-
-      - name: 🧹 Cleanup private key
-        run: |
-          shred -u private_key.pem
