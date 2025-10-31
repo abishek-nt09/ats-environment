@@ -39,7 +39,7 @@ jobs:
             sudo mkdir -p /var/www/ats /var/www/ats-backups
             sudo chown -R ${USER}:www-data /var/www/ats /var/www/ats-backups
 
-            # Configure PostgreSQL user and database (idempotent)
+            # Configure PostgreSQL user and database
             if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='ak_user';" | grep -q 1; then
               sudo -u postgres psql -c "CREATE USER ak_user WITH PASSWORD 'navat';"
               echo "✅ PostgreSQL user 'ak_user' created."
@@ -57,31 +57,31 @@ jobs:
             # Grant privileges
             sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ak_db TO ak_user;"
 
-            # Write Nginx configuration file dynamically
+            # Write Nginx configuration dynamically
             echo "🧩 Writing Nginx configuration..."
-            sudo bash -c "cat > /etc/nginx/sites-available/ats.conf" <<'NGINX'
-                server {
-                    listen 80;
-                    server_name ${HOST};
+            sudo bash -c 'cat <<NGINX > /etc/nginx/sites-available/ats.conf
+            server {
+                listen 80;
+                server_name ${HOST};
 
-                    root /var/www/ats/frontend/dist;
-                    index index.html;
+                root /var/www/ats/frontend/dist;
+                index index.html;
 
-                    location / {
-                        try_files \$uri \$uri/ /index.html;
-                    }
-
-                    location /backend/ {
-                        rewrite ^/backend/?(.*)\$ /\$1 break;
-                        proxy_pass http://127.0.0.1:8000/;
-                        proxy_http_version 1.1;
-                        proxy_set_header Upgrade \$http_upgrade;
-                        proxy_set_header Connection 'upgrade';
-                        proxy_set_header Host \$host;
-                        proxy_set_header X-Real-IP \$remote_addr;
-                    }
+                location / {
+                    try_files \$uri \$uri/ /index.html;
                 }
-                'NGINX'
+
+                location /backend/ {
+                    rewrite ^/backend/?(.*)\$ /\$1 break;
+                    proxy_pass http://127.0.0.1:8000/;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade \$http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                }
+            }
+            NGINX
 
             sudo ln -sf /etc/nginx/sites-available/ats.conf /etc/nginx/sites-enabled/ats.conf
             sudo nginx -t
